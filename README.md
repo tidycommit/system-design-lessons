@@ -33,8 +33,9 @@ A new lesson is added every day after 5 AM ET.
 | 15 | [Case study, designing a URL shortener](lessons/15-url-shortener.md) | 2026-10-14 |
 | 16 | [Case study, designing a news feed](lessons/16-news-feed.md) | 2026-10-15 |
 | 17 | [Case study: a chat app](lessons/17-chat-app.md) | 2026-10-16 |
+| 18 | [Case study: ride-sharing](lessons/18-ride-sharing.md) | 2026-10-17 |
 
-_17 lessons so far._
+_18 lessons so far._
 
 <!-- LESSONS:END -->
 
