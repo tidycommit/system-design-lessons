@@ -37,8 +37,9 @@ A new lesson is added every day after 5 AM ET.
 | 19 | [Case study: notification system](lessons/19-notification-system.md) | 2026-10-18 |
 | 20 | [Case study: distributed cache](lessons/20-distributed-cache.md) | 2026-10-19 |
 | 21 | [Case study: search typeahead](lessons/21-typeahead.md) | 2026-10-20 |
+| 22 | [Case study: video streaming](lessons/22-video-streaming.md) | 2026-10-21 |
 
-_21 lessons so far._
+_22 lessons so far._
 
 <!-- LESSONS:END -->
 
