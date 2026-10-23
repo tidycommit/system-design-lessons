@@ -1,4 +1,4 @@
-# 23. Case Study: Designing a Payment System
+# 23. Case study: payment system
 
 _Sent 2026-10-22_
 

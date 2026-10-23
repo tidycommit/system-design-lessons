@@ -1,4 +1,4 @@
-# 24. Case Study: Designing a Web Crawler
+# 24. Case study: web crawler
 
 _Sent 2026-10-23_
 
