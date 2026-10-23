@@ -39,8 +39,9 @@ A new lesson is added every day after 5 AM ET.
 | 21 | [Case study: search typeahead](lessons/21-typeahead.md) | 2026-10-20 |
 | 22 | [Case study: video streaming](lessons/22-video-streaming.md) | 2026-10-21 |
 | 23 | [Case Study: Designing a Payment System](lessons/23-payment-system.md) | 2026-10-22 |
+| 24 | [Case Study: Designing a Web Crawler](lessons/24-web-crawler.md) | 2026-10-23 |
 
-_23 lessons so far._
+_24 lessons so far._
 
 <!-- LESSONS:END -->
 
