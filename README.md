@@ -41,8 +41,9 @@ A new lesson is added every day after 5 AM ET.
 | 23 | [Case study: payment system](lessons/23-payment-system.md) | 2026-10-22 |
 | 24 | [Case study: web crawler](lessons/24-web-crawler.md) | 2026-10-23 |
 | 25 | [Case study: distributed job scheduler](lessons/25-distributed-job-scheduler.md) | 2026-10-24 |
+| 26 | [Case study: collaborative editor](lessons/26-collaborative-editor.md) | 2026-10-25 |
 
-_25 lessons so far._
+_26 lessons so far._
 
 <!-- LESSONS:END -->
 
