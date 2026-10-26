@@ -42,8 +42,9 @@ A new lesson is added every day after 5 AM ET.
 | 24 | [Case study: web crawler](lessons/24-web-crawler.md) | 2026-10-23 |
 | 25 | [Case study: distributed job scheduler](lessons/25-distributed-job-scheduler.md) | 2026-10-24 |
 | 26 | [Case study: collaborative editor](lessons/26-collaborative-editor.md) | 2026-10-25 |
+| 27 | [Distributed transactions: two-phase commit vs sagas](lessons/27-distributed-transactions.md) | 2026-10-26 |
 
-_26 lessons so far._
+_27 lessons so far._
 
 <!-- LESSONS:END -->
 
