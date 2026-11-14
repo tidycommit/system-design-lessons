@@ -48,8 +48,14 @@ A new lesson is added every day after 5 AM ET.
 | 30 | [Backpressure and load shedding](lessons/30-backpressure-load-shedding.md) | 2026-10-29 |
 | 31 | [Object storage (an S3-like blob store)](lessons/31-object-storage.md) | 2026-10-30 |
 | 32 | [Distributed locks and fencing tokens](lessons/32-distributed-locks-fencing.md) | 2026-10-31 |
+| 33 | [The dual-write problem: transactional outbox and change data capture](lessons/33-outbox-cdc.md) | 2026-11-01 |
+| 34 | [Storage engines: LSM trees vs B-trees](lessons/34-lsm-vs-btree.md) | 2026-11-02 |
+| 35 | [Time and ordering: wall clocks, Lamport clocks, HLC, and TrueTime](lessons/35-clocks-and-ordering.md) | 2026-11-05 |
+| 36 | [Circuit breakers and bulkheads](lessons/36-circuit-breakers-bulkheads.md) | 2026-11-06 |
+| 37 | [Hot keys and hotspot mitigation](lessons/37-hot-keys.md) | 2026-11-07 |
+| 38 | [Case study: file sync (Dropbox-style)](lessons/38-file-sync.md) | 2026-11-14 |
 
-_32 lessons so far._
+_38 lessons so far._
 
 <!-- LESSONS:END -->
 
