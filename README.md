@@ -43,8 +43,13 @@ A new lesson is added every day after 5 AM ET.
 | 25 | [Case study: distributed job scheduler](lessons/25-distributed-job-scheduler.md) | 2026-10-24 |
 | 26 | [Case study: collaborative editor](lessons/26-collaborative-editor.md) | 2026-10-25 |
 | 27 | [Distributed transactions: two-phase commit vs sagas](lessons/27-distributed-transactions.md) | 2026-10-26 |
+| 28 | [Case study: ticket booking (Ticketmaster-style)](lessons/28-ticket-booking.md) | 2026-10-27 |
+| 29 | [Case study: a metrics and monitoring system](lessons/29-metrics-monitoring.md) | 2026-10-28 |
+| 30 | [Backpressure and load shedding](lessons/30-backpressure-load-shedding.md) | 2026-10-29 |
+| 31 | [Object storage (an S3-like blob store)](lessons/31-object-storage.md) | 2026-10-30 |
+| 32 | [Distributed locks and fencing tokens](lessons/32-distributed-locks-fencing.md) | 2026-10-31 |
 
-_27 lessons so far._
+_32 lessons so far._
 
 <!-- LESSONS:END -->
 
