@@ -8,7 +8,7 @@ Yesterday's URL shortener was a single lookup. A news feed (think the X home tim
 
 **The core decision: fan-out on write or fan-out on read**
 - **Fan-out on write (push).** When someone posts, you immediately add the post ID to a precomputed feed list for each follower, usually stored in Redis. Reading a feed is then one cheap lookup. The cost lands on writes: a user with 1,000 followers causes 1,000 inserts per post.
-- **Fan-out on read (pull).** You store posts only by author. When someone opens their feed, you fetch recent posts from everyone they follow and merge them. Writes are cheap, but every read fans out across hundreds of accounts, often on many shards, which is Lesson 7's scatter-gather problem and Lesson 3's tail latency.
+- **Fan-out on read (pull).** You store posts only by author. When someone opens their feed, you fetch recent posts from everyone they follow and merge them. Writes are cheap, but every read fans out across hundreds of accounts, often on many shards, which is (lesson 7)'s scatter-gather problem and (lesson 3)'s tail latency.
 - **The hybrid everyone actually uses.** Push for normal accounts and pull for celebrities. When someone with 50 million followers posts, you don't write 50 million inserts. Instead, each reader's feed merges their precomputed list with a quick pull of the few celebrity accounts they follow.
 
 ```mermaid
@@ -29,11 +29,16 @@ flowchart LR
 
 **In the real world:** Twitter described exactly this setup in talks around 2012 and 2013. Each tweet was fanned out into in-memory Redis timelines for followers. Accounts with huge followings were handled differently, by merging their tweets in at read time, because pushing one celebrity tweet into tens of millions of timelines took too long and delayed everyone else's.
 
+**A second example: "Feeding Frenzy" (Yahoo, SIGMOD 2010).** This paper put the push-versus-pull choice on a formal footing. Instead of a global rule, it makes the decision **per producer-consumer pair**: push an event into a consumer's materialized feed when that consumer views often relative to how often the producer posts, otherwise leave it in the producer's store and pull at read time. It proves that making these independent per-pair decisions minimizes total system cost, which is the rigorous version of "push for normal users, pull for celebrities." The practical upshot is that the right split isn't "celebrities vs everyone," it's a ratio: a prolific poster that a given follower rarely checks is better pulled, even if neither is famous.
+
 **Tradeoffs and gotchas**
 - **Wasted work for inactive users.** Pushing into the feeds of people who haven't opened the app in months burns writes and memory. Skip inactive users and rebuild their feed with a pull when they come back.
-- **Fan-out lag.** Fan-out happens through a queue (Lesson 9), so a busy moment can delay delivery. Watch consumer lag, and handle the poster's own feed specially so they see their post immediately (read-your-writes from Lesson 8).
+- **Fan-out lag.** Fan-out happens through a queue (lesson 9), so a busy moment can delay delivery. Watch consumer lag, and handle the poster's own feed specially so they see their post immediately (read-your-writes from lesson 8).
 - **Deletes and blocks.** A deleted post or a newly blocked account may still sit in thousands of precomputed lists. Filter at hydration time, not just at fan-out time.
 - **Ranking changes the shape.** A ranked feed scores hundreds of candidate posts per request with a model, so candidate generation and ranking each need their own latency budget.
-- **Retries cause duplicates.** Fan-out workers get at-least-once delivery, so inserts into feed lists should be idempotent (Lesson 11). A sorted set keyed by post ID makes that free.
+- **Retries cause duplicates.** Fan-out workers get at-least-once delivery, so inserts into feed lists should be idempotent (lesson 11). A sorted set keyed by post ID makes that free.
+- **Thundering herd on a celebrity post.** The pulled part of the feed hits the celebrity's post store hard; cache those hot authors aggressively (lesson 37).
+
+**When to use which.** Pure push works when follow counts are modest and even, giving the cheapest possible reads. Pure pull works when writes vastly outnumber reads or follow graphs are tiny. Nearly every real social feed lands on the hybrid, and "Feeding Frenzy" says to make the push/pull cut per relationship by view-to-post ratio, not by a single celebrity threshold. If your product isn't read-heavy, reconsider precomputing feeds at all.
 
 **Try this:** A user follows 2,000 accounts, 15 of them celebrities with over 10 million followers each, and opens the app after a week away. Walk through how your hybrid design builds their feed. What's in their precomputed list, what has to be pulled live, and how do you keep it under 200 ms?

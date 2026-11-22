@@ -21,7 +21,7 @@ A new lesson is added every day after 5 AM ET.
 | 03 | [Latency vs. throughput](lessons/03-latency-vs-throughput.md) | 2026-10-01 |
 | 04 | [Vertical vs. horizontal scaling](lessons/04-vertical-vs-horizontal-scaling.md) | 2026-10-03 |
 | 05 | [SQL vs. NoSQL, picking a data store](lessons/05-sql-vs-nosql.md) | 2026-10-04 |
-| 06 | [Database replication — copies are easy, agreement is hard](lessons/06-replication.md) | 2026-10-05 |
+| 06 | [Database replication: copies are easy, agreement is hard](lessons/06-replication.md) | 2026-10-05 |
 | 07 | [Sharding, or splitting one database into many](lessons/07-sharding.md) | 2026-10-06 |
 | 08 | [Consistency models, or what a read actually promises](lessons/08-consistency-models.md) | 2026-10-07 |
 | 09 | [Message queues vs. event streams](lessons/09-queues-vs-streams.md) | 2026-10-08 |

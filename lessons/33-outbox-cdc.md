@@ -18,15 +18,22 @@ flowchart LR
   K --> A[Analytics / search index]
 ```
 
+Why tailing the log works at all: the replication log is already the database's own durable, totally-ordered record of every committed change, the same stream followers replay (lesson 6). Reading it means you see exactly what committed, in commit order, and never a write that rolled back. That's why CDC gives you correctness "for free" that application-level dual writes can't.
+
 **Real-world example.** Debezium is the widely used open-source CDC tool: it runs as Kafka Connect connectors that read the MySQL binlog or Postgres WAL and emit one event per row change, and it ships an "outbox event router" transform built specifically for this pattern, routing outbox rows to topics by aggregate type. Before Debezium, LinkedIn built Databus (described in a SoCC 2012 paper) to stream changes from its primary databases to search indexes, caches, and the social graph, for the same reason: application code writing to the DB *and* to each downstream system kept drifting out of sync.
+
+**A second example: Airbnb's SpinalTap (2018).** Airbnb open-sourced SpinalTap, a CDC service that reads row-based MySQL binlogs, converts each insert, update, and delete into a standardized "mutation," and publishes to Kafka. Two operational details are instructive. It requires `binlog-format=ROW` (not statement-based), because only row-based logs record the actual before/after values rather than the SQL text, which could be non-deterministic. And it connects as a normal replication client with a unique server id, tracks binlog positions as checkpoints, preserves per-row commit order, and provides at-least-once delivery. That at-least-once guarantee is the recurring catch of all CDC: consumers must dedupe (lesson 11). SpinalTap shows CDC as a reusable *service* that many downstream systems subscribe to, rather than a one-off pipeline, which is how large companies avoid the N-by-M integration mess.
 
 **Tradeoffs and failure modes.**
 - **At-least-once, always.** The relay can publish and crash before recording that it did, so events will sometimes be duplicated. Consumers must be idempotent, keyed on the event id (lesson 11 comes back).
-- **Ordering is per key, not global.** Partition the topic by aggregate id so all events for one order stay in order. Across orders, don't assume anything.
+- **Ordering is per key, not global.** Partition the topic by aggregate id so all events for one order stay in order (lesson 9). Across orders, don't assume anything.
 - **Polling vs log tailing.** A polling relay is simple and works on any database, but adds latency and query load on a hot table. Log tailing is near real time and cheap for the DB, but it's more infrastructure, and it's tied to replication internals.
 - **Replication slots can hurt the primary.** In Postgres, a logical slot holds WAL until the consumer confirms it. If the CDC connector stalls for hours, WAL piles up and can fill the primary's disk. Alert on slot lag.
 - **CDC on raw tables leaks your schema.** Every column rename becomes a breaking change for consumers. The outbox gives you an explicit, versioned event contract instead.
+- **Statement-based logs don't work.** CDC needs row-level before/after images; statement-based replication can't be replayed deterministically, which is why SpinalTap mandates ROW format.
 - **Outbox cleanup.** The table grows forever unless you delete or partition sent rows.
 - **Snapshots.** A new consumer needs existing state, not just future changes. CDC tools do an initial snapshot, then switch to the log, and the handoff has to avoid gaps.
+
+**When to use which.** Use the transactional outbox when you own the service and want an explicit, versioned event contract that survives schema changes; it's the cleanest option and works on any database. Use CDC straight off business tables when you need to stream an existing database you can't easily change, or feed many downstream systems (search, cache, analytics) from one source, accepting that you're now coupled to the schema. The common best-of-both is to CDC an outbox table. Either way, design every consumer to be idempotent, because all of these are at-least-once.
 
 **Try this.** Your product search index (Elasticsearch) must reflect price changes within 5 seconds, and price updates come from three services that all write to the same Postgres `products` table. Would you CDC the `products` table directly or have each service write an outbox event? How do you make sure an older price event arriving late never overwrites a newer one in the index, and what happens to the index when you rebuild it from scratch?

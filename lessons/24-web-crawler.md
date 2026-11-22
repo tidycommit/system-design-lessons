@@ -37,14 +37,23 @@ Google's 2007 paper "Detecting Near-Duplicates for Web Crawling" (Manku, Jain, D
 
 On the open side, **Common Crawl** runs a public crawl and publishes regular snapshots of billions of pages, in WARC files on S3, which is why so many search and ML projects start there instead of writing their own crawler.
 
+## A second example: IRLbot (WWW 2008)
+
+IRLbot is a striking counterpoint to "you need a huge cluster." It was a *single-server* crawler that, over about 41 active days in 2007, downloaded 6.38 billion valid HTML pages at an average of roughly 1,789 pages per second (around 319 Mb/s). The bottleneck it had to solve was the one this lesson is about: checking "have I seen this URL?" against billions of entries without thrashing the disk. Their answer, DRUM (Disk Repository with Update Management), hashes URLs into disk buckets, then processes incoming URLs in large sorted batches compared against the on-disk set in one sequential pass, turning billions of random lookups into sequential I/O. The design lesson travels well beyond crawling: when a working set outgrows memory, batching and sorting to convert random access into sequential access is often what makes it feasible at all (it's the same instinct behind LSM trees in lesson 34).
+
 ## Tradeoffs and failure modes
 
 - **Spider traps.** Infinite calendars, `?page=` loops and URLs that keep growing will eat your budget. Defend with a max URL length, a max path depth, a per-host page budget, and pattern detection for repeating path segments.
 - **Politeness vs throughput.** Per-host rate limits mean a crawl of a few giant sites is slow no matter how many machines you add. Throughput comes from crawling *many* hosts in parallel, not one host faster.
 - **Freshness vs coverage.** Every fetch spent re-crawling a news homepage is a fetch not spent discovering new pages. Most crawlers estimate each page's change rate and schedule revisits by it, and use conditional requests (`If-Modified-Since`, `ETag`) so an unchanged page costs a `304` instead of a full body.
+- **URL-seen state outgrows RAM.** Billions of URLs can't live in memory, which is exactly IRLbot's problem; use a Bloom filter in front plus a disk-backed, batched set.
 - **Hot hosts in one shard.** Hashing by host keeps politeness simple but a huge site lands on one partition. Big hosts sometimes get split across several back queues with a shared rate budget.
 - **JavaScript rendering.** Many pages are empty until JS runs. Rendering in a headless browser costs far more than a plain HTTP fetch, so it's usually a second, smaller tier for pages that need it.
 - **Crash recovery.** The frontier is huge and mostly on disk. Checkpoint it, and make "fetch URL" idempotent so a replayed batch just overwrites the same page record.
+
+## When to use what
+
+Build your own crawler only when you need control over what and how often you fetch (a vertical price crawler, a focused research crawl). If you just need a broad snapshot of the web, start from Common Crawl and skip the fetching infrastructure entirely. Use a Bloom filter plus a disk-backed, batched seen-set once the URL set exceeds memory, and use near-duplicate fingerprints (SimHash) rather than exact hashes when you care about mirrored and syndicated content. Scale by crawling many hosts in parallel, never by hitting one host harder.
 
 ## Try this
 

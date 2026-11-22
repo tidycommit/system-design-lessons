@@ -23,20 +23,25 @@ flowchart LR
 
 **Adaptive bitrate is the core idea**
 
-Formats like HLS and MPEG-DASH let the player switch quality between segments. If your bandwidth drops, the next segment comes from the lower-bitrate version, so you see a blurrier picture instead of a spinner. The player watches its own buffer and download speed and picks each next segment. That puts the clever logic on the client, and keeps the servers simple: they only serve static files, which is exactly what CDNs are good at.
+Formats like HLS and MPEG-DASH let the player switch quality between segments. If your bandwidth drops, the next segment comes from the lower-bitrate version, so you see a blurrier picture instead of a spinner. The player watches its own buffer and download speed and picks each next segment. That puts the clever logic on the client, and keeps the servers simple: they only serve static files, which is exactly what CDNs are good at (lesson 12).
 
 **Real-world example**
 
 Netflix encodes each title ahead of time and places copies inside internet providers' networks with its Open Connect appliances, so most bytes never cross the wider internet. It also moved from one fixed set of bitrates to per-title encoding, choosing settings per show, because a cartoon needs far fewer bits than a grainy action film to look good. YouTube faces the other extreme: a huge volume of uploads, most rarely watched, so it can't afford to encode everything into every format up front.
+
+**A second example: YouTube's Argos video chip (ASPLOS 2021).** Transcoding is so expensive at YouTube's scale that Google built a custom ASIC for it, the Video Coding Unit (internally "Argos"). Each VCU has 10 encoder cores and supports H.264 and VP9, and Google reported 20x to 33x better efficiency than its previous optimized software encoders, measured including three-year total cost of ownership. The point for a system designer isn't the chip; it's *why* it exists. When you upload once and a file is transcoded into many formats and resolutions, encoding compute dominates the whole pipeline's cost, so the upload side and the delivery side scale on completely different resources: delivery is a bandwidth and caching problem, ingest is a compute problem big enough to justify custom silicon.
 
 **Tradeoffs and gotchas**
 
 - **Encode everything vs on demand.** Pre-encoding every bitrate gives the fastest playback but wastes compute and storage on videos nobody watches. Many platforms encode a few common versions right away and add the rest only once a video gets popular.
 - **Segment length.** Short segments let quality adapt faster and lower live latency, but mean more requests and larger manifests. Around 2 to 6 seconds is common.
 - **Popular vs long-tail content.** A hit show stays in edge caches. The millions of rarely watched videos miss the cache and hit origin, so you need a tiered cache or origin shield in between.
-- **Transcoding is parallel work.** Split a long video into chunks, encode them on many workers at once, and stitch the results. Make each chunk job idempotent, since workers die and jobs retry.
+- **Transcoding is parallel work.** Split a long video into chunks, encode them on many workers at once, and stitch the results. Make each chunk job idempotent (lesson 11), since workers die and jobs retry.
+- **Codec choice is a cost/compatibility tradeoff.** Newer codecs (VP9, AV1) cut bandwidth but cost more to encode and aren't supported on every old device, so you keep H.264 around as a fallback.
 - **Live is a different problem.** For live streams you can't encode ahead of time, and every second of delay matters. Low-latency HLS and smaller segments help, at the cost of more load and less buffer against hiccups.
 - **Start-up time matters most.** Viewers leave if the first frame is slow. Start at a modest bitrate, prefetch the first segments, and keep the manifest and first segment hot in the cache.
+
+**When to use which encoding strategy.** Pre-encode the full bitrate ladder up front for a curated, predictable catalog where nearly everything gets watched (a streaming service). Encode lazily, a couple of common renditions first and the rest on demand once a video gains views, for user-generated platforms where most uploads are rarely seen. For live, encode once in real time at a few bitrates and accept smaller buffers. And always separate the ingest (compute-heavy) and delivery (bandwidth-heavy) systems, because they scale on different resources.
 
 **Try this**
 

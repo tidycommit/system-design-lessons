@@ -28,20 +28,25 @@ Routing. `hash(key) % N` remaps almost every key when N changes, which empties t
 
 Where routing lives. A smart client library is fastest (no extra hop) but every language needs one and every config change has to reach every app server. A proxy layer (Twemproxy, mcrouter, Envoy) adds a hop but centralizes routing, pooling, and failover.
 
-Invalidation. Writes go to the database, then the cache entry is *deleted*, not overwritten. A delete is idempotent and safe to retry. A set can race with another set and leave stale data behind. Tailing the database commit log to drive deletes means you don't depend on every code path remembering to invalidate.
+Invalidation. Writes go to the database, then the cache entry is *deleted*, not overwritten. A delete is idempotent and safe to retry. A set can race with another set and leave stale data behind. Tailing the database commit log to drive deletes (lesson 33) means you don't depend on every code path remembering to invalidate.
 
 **Real-world anchor**
 
 Facebook's "Scaling Memcache at Facebook" paper (NSDI 2013) is the standard reference. They put mcrouter in front of memcached pools, drove invalidations from the MySQL commit log (a daemon called mcsqueal), and used *leases*: on a miss, the cache hands one client a token to refill the key, while the others briefly wait or accept slightly stale data. That one mechanism fixed both stale sets and thundering herds. They also kept a small "gutter" pool that takes traffic for failed nodes, so a dead box doesn't turn into a burst of database load.
 
+**A second example: Discord's data services (2023).** When Discord wrote about storing trillions of messages, the key scaling move wasn't the database, it was a layer of Rust **data services** between the API and the store. Consistent hashing routes every request for a given key (a channel) to the same data service instance, which lets it do **request coalescing**: when thousands of users ask for the same hot channel at once, the service issues one database query and shares the single result with all of them. That's the "single-flight" idea from (lesson 1) applied as a standalone tier, and it's what let them keep hot partitions from melting the datastore. It's a reminder that a cache tier's real job is often collapsing duplicate work, not just storing values.
+
 **Tradeoffs and gotchas**
 
-- **Hot keys.** One celebrity profile or config blob can saturate a single node no matter how good your hashing is. Replicate hot keys across several nodes, add a tiny in-process L1 cache with a short TTL, or split the key (`key#1..key#k`) and pick one at random on reads.
+- **Hot keys.** One celebrity profile or config blob can saturate a single node no matter how good your hashing is. Replicate hot keys across several nodes, add a tiny in-process L1 cache with a short TTL, or split the key (`key#1..key#k`) and pick one at random on reads (lesson 37).
 - **Stampedes.** A popular key expiring sends every request to the DB at once. Use leases or request coalescing (single-flight), and add jitter to TTLs so keys don't all expire together.
 - **Replication vs capacity.** Replicating each key doubles memory but keeps hit rate up when a node dies. Many teams skip replication, accept the brief miss spike, and rely on gutter or warm-up instead.
 - **Cold start.** A new cluster or region at a 0% hit rate can flatten the database. Warm it from an existing cluster, or ramp traffic over gradually.
 - **Eviction policy.** LRU is the default, but scan-heavy workloads push out hot data. LFU or segmented LRU (Redis offers LFU modes) holds up better. Watch evictions per second as a capacity signal, not just memory used.
+- **Rebalance traffic.** Even consistent hashing moves 1/N of keys on a node change, and those all miss at once. Stagger node additions and expect a brief miss spike.
 - **Big values.** A 5 MB value hogs the network and stalls the node's event loop (Redis runs commands on a single thread). Cap value sizes or compress, and paginate large collections.
+
+**When to use what.** Use a client-side hashing library when you control all app languages and want the lowest latency; use a proxy tier (mcrouter, Envoy) when you want central routing, pooling, and failover across many services. Add request coalescing whenever a few keys take a large share of reads. Replicate hot keys only when a single node genuinely can't serve one key's traffic, since replication doubles memory for the benefit. And never treat the cache as durable: always have a path to rebuild from the source of truth.
 
 **Try this**
 

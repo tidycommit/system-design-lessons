@@ -31,13 +31,18 @@ Popularity usually means search counts with time decay, so last week's news fade
 
 Google's autocomplete combines query popularity, freshness, location, and language, and removes predictions that break its policies. Many smaller sites build the same thing on Elasticsearch's completion suggester, which keeps a prefix structure in memory for fast lookups.
 
+**A second example: Facebook's "The Life of a Typeahead Query" (2010).** Facebook's people-search typeahead shows a different flavor, because it's personalized. When you focus the search box, the browser preloads your first-degree connections (friends, pages, groups, events) into a local cache, so matching against people you already know happens instantly on the client with no server round trip at all. Only if the local cache lacks enough matches does the browser send an AJAX request, along with the IDs it already showed, to a *stateless aggregator*. That aggregator fans the query out to specialized leaf services in parallel, merges and ranks their results, and returns IDs that the web tier hydrates and privacy-checks. Two ideas worth stealing: push the hottest, most personal data to the client so the common case needs no server, and keep the aggregator stateless so it scales horizontally (lesson 4) while the leaf services own the indexes.
+
 **Tradeoffs and gotchas**
 
 - **Request volume.** One query can be 5 to 10 requests. Debounce on the client (wait about 100 to 200 ms after typing stops), cancel stale requests, and cache short prefixes hard, since "a" and "s" are asked constantly.
-- **Sharding by prefix.** Splitting by first letter is uneven, because far more queries start with "s" than "x". Shard by a hash of the prefix, or split hot ranges further.
+- **Sharding by prefix.** Splitting by first letter is uneven, because far more queries start with "s" than "x". Shard by a hash of the prefix, or split hot ranges further (lesson 37).
 - **Freshness vs cost.** Rebuilding the whole index every minute is wasteful, and rebuilding weekly misses breaking news. Batch plus a small trending layer is the usual middle ground.
 - **Filtering.** Suggestions put words in users' mouths. You need blocklists and review for offensive, defamatory, or unsafe completions, applied before a suggestion can show.
+- **Personalization breaks shared caching.** Anything user-specific can't sit in a shared edge cache, so split the response into a cacheable popular part and a per-user part (lesson 12), as Facebook did by caching friends on the client.
 - **Typos and languages.** Prefix matching alone fails on "sytem". Fuzzy matching and per-language tokenization help, but they cost latency, so many systems try exact prefix first and fall back.
+
+**When to use which design.** For public, non-personalized suggestions (a search engine, a product catalog), a precomputed top-k-per-prefix index served from memory and fronted by an edge cache is the right call, since the same prefixes are asked constantly. For personalized typeahead (your contacts, your files), push the user's own hot set to the client and use a stateless aggregator over leaf indexes for the rest. In both cases keep popularity computation strictly off the serving path.
 
 **Try this**
 
