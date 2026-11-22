@@ -20,8 +20,8 @@ flowchart LR
 
 Four ideas carry the design:
 
-1. **Idempotency end to end.** The client generates a key per checkout attempt and every hop reuses it. Your payment service stores the key with the request and the result, so a retry returns the saved result instead of charging again. You pass the same key to the PSP, which dedupes on its side too.
-2. **An explicit state machine.** A payment moves `CREATED → AUTHORIZED → CAPTURED → SETTLED`, with side exits to `FAILED`, `VOIDED`, `REFUNDED`. You write the intent (`CREATED`, with the key) *before* calling the PSP, so a crash mid-call leaves a record that says "outcome unknown, go find out," not silence.
+1. **Idempotency end to end.** The client generates a key per checkout attempt and every hop reuses it. Your payment service stores the key with the request and the result, so a retry returns the saved result instead of charging again. You pass the same key to the PSP, which dedupes on its side too (lesson 11).
+2. **An explicit state machine.** A payment moves `CREATED -> AUTHORIZED -> CAPTURED -> SETTLED`, with side exits to `FAILED`, `VOIDED`, `REFUNDED`. You write the intent (`CREATED`, with the key) *before* calling the PSP, so a crash mid-call leaves a record that says "outcome unknown, go find out," not silence.
 3. **A double-entry ledger.** Every movement is an immutable pair of entries that sums to zero (debit customer receivable, credit merchant payable). You never update a balance in place; you append and derive. Mistakes are fixed with new reversing entries, which gives you a full audit trail.
 4. **Reconciliation.** Webhooks get lost and PSPs occasionally disagree with you. A daily job compares your ledger against the PSP's settlement report and flags every mismatch for a human or an automated fix.
 
@@ -29,14 +29,23 @@ Four ideas carry the design:
 
 Stripe's API lets you send an `Idempotency-Key` header on POST requests; if you retry with the same key, Stripe returns the original response (including errors) rather than performing the operation again, and keys can be pruned once they're at least 24 hours old. Stripe also delivers results like `payment_intent.succeeded` via webhooks that may arrive more than once or out of order, so their docs tell you to dedupe on the event ID and not assume ordering. Card payments typically split into **authorize** (the issuer places a hold) and **capture** (you actually take the money), which is why a hotel or a marketplace can hold funds at booking and capture later, and why an uncaptured authorization eventually expires.
 
+## A second example: Uber's Gulfstream and LedgerStore (2021)
+
+Uber wrote about its payment platform, Gulfstream, and the ledger database behind it, LedgerStore. The design is the double-entry ledger above, taken to an extreme: every order moves money between accounts with entries that sum to zero, orders are persisted before they're processed, and ledger records are **append-only and never modified**. LedgerStore adds "sealing," manifests, and revisions so that old data can be proven not to have been tampered with, and corrections are new entries rather than edits. Two lessons generalize. First, immutability is the feature: an audit trail you can't rewrite is what makes a financial system trustworthy and debuggable. Second, the hard part at scale isn't writing the ledger, it's indexing and querying trillions of immutable entries while keeping that guarantee, which is why a payment ledger often ends up as its own purpose-built store (Square's "Books" on Cloud Spanner is another public example of the same immutable double-entry pattern).
+
 ## Tradeoffs and failure modes
 
 - **The timeout problem.** If the PSP call times out, you don't know whether it charged. Never "just retry with a new key." Retry with the same key, or query the PSP by your reference, and leave the payment in a pending state until you know.
 - **Sync vs async.** Waiting on the PSP synchronously gives a fast checkout answer but ties your latency to theirs. Treating the webhook as the source of truth is more robust but means the UI must handle "processing" honestly.
-- **Strong consistency where it matters.** The ledger and payment state belong in a transactional store (Postgres is a common choice) with the state change and ledger entries in one transaction. Eventual consistency is fine for analytics and receipts, not for balances.
-- **Outbox over dual writes.** Updating your DB and publishing an event as two separate steps will eventually lose one. Write the event to an outbox table in the same transaction and relay it.
+- **Strong consistency where it matters.** The ledger and payment state belong in a transactional store (Postgres is a common choice) with the state change and ledger entries in one transaction. Eventual consistency is fine for analytics and receipts, not for balances (lesson 8).
+- **Outbox over dual writes.** Updating your DB and publishing an event as two separate steps will eventually lose one. Write the event to an outbox table in the same transaction and relay it (lesson 33).
+- **Reconciliation is not optional.** Lost webhooks and PSP disagreements are routine, not rare. A system without a daily compare-and-flag job quietly accumulates wrong balances.
 - **Multi-PSP routing.** A second provider improves resilience and authorization rates, but now reconciliation, refunds, and idempotency span two systems with different semantics.
 - **Money types.** Store integer minor units (cents) plus a currency code, never floats. Some currencies have zero or three decimal places.
+
+## When to use what
+
+Keep the payment state machine and ledger in a strongly consistent transactional store, and make every state transition idempotent; this is the one place in your system where you spend freely on correctness. Treat the PSP webhook as the source of truth for asynchronous outcomes, and the synchronous response as a hint. Use an append-only ledger with reversing entries rather than mutable balances whenever you need auditability, which for real money is always. Reserve multi-PSP routing for when authorization rates or resilience genuinely justify the doubled reconciliation complexity.
 
 ## Try this
 

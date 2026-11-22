@@ -18,21 +18,28 @@ flowchart LR
   Conn --> Presence[(Presence cache)]
 ```
 
+**The path of one message.** Client A sends over its open socket to whatever connection server it's attached to. That server hands the message to the message service, which assigns it a per-conversation sequence number and writes it durably *before* acknowledging, so an accepted message is never lost. Then it looks up where each recipient is connected and pushes the message down their socket; anyone offline gets it queued and, optionally, a push notification. The connection tier is the stateful, tricky part, because it has to keep an accurate map of user to server as clients connect, drop, and reconnect to different servers.
+
 **What it looks like in practice**
 
-WhatsApp-style designs run a large fleet of connection servers and store messages in a partitioned database, keyed by conversation or by each recipient's inbox. In a 1:1 chat, fan-out is easy. You write the message once, then push it to the other person's open connection if they have one. If they don't, you queue it so they get it when their app syncs, or as a push notification.
+WhatsApp-style designs run a large fleet of connection servers and store messages in a partitioned database, keyed by conversation or by each recipient's inbox. In a 1:1 chat, fan-out is easy. You write the message once, then push it to the other person's open connection if they have one. If they don't, you queue it so they get it when their app syncs, or as a push notification. One data point on how dense the connection tier can get: in 2012 WhatsApp reported sustaining over 2 million open TCP connections on a single tuned server (lesson 4).
 
-Big groups are harder. If you copy every message into every member's inbox, the work grows with group size times message count. The common fix is to write the message once to the conversation's log and let each member read forward from their own saved position in it. That's the same tradeoff you saw in the news feed lesson: fan out when a post is written, or when someone reads.
+Big groups are harder. If you copy every message into every member's inbox, the work grows with group size times message count. The common fix is to write the message once to the conversation's log and let each member read forward from their own saved position in it. That's the same tradeoff you saw in the news feed lesson (lesson 16): fan out when a post is written, or when someone reads.
 
 Delivery receipts (sent, delivered, read) are just more events on that same log. They don't need their own separate database.
+
+**A second example: Slack's real-time messaging (2023).** Slack described stateful, in-memory **Channel Servers** that own channel IDs by consistent hashing, each handling around 16 million channels at peak. Separate **Gateway Servers**, deployed regionally, hold users' WebSocket subscriptions; a Channel Server broadcasts a new message to the relevant gateways, which fan it out to subscribed clients. A ring-management system (CHARMs, backed by Consul) replaces an unhealthy Channel Server in under 20 seconds. It's the connection-tier / message-service split above, made concrete, and it shows how consistent hashing (lesson 2) plus fast failover keeps a stateful real-time tier from becoming a single point of failure.
 
 **Tradeoffs and gotchas**
 
 - **Ordering vs availability.** You don't need one strict order across every chat, and it's expensive to get. Number messages within each conversation instead. If the network splits, it's better to accept the message and sort things out later than to leave the sender stuck.
 - **Connection state.** Sticky load balancing helps, but when servers die you're safer with a registry that maps each user to their connection server. If you miss a disconnect, you'll keep pushing messages into nothing until the heartbeat times out.
 - **Fan-out cost.** Copying every message into each inbox of a 10,000-person group will overload your write servers and storage. Use the read-from-the-log approach for large rooms and copy into inboxes only for small chats.
-- **Idempotency.** Clients retry sends. If you don't remove duplicates using a message ID the client generates, the same message shows up twice.
+- **Idempotency.** Clients retry sends. If you don't remove duplicates using a message ID the client generates, the same message shows up twice (lesson 11).
+- **Reconnect storms.** When a connection server dies, all its clients reconnect at once and can overwhelm the replacement. Jitter reconnect delays and shed load (lesson 30).
 - **Presence lies.** Expect it to lag behind reality. "Last seen" is fine to show, but don't promise someone is definitely online.
+
+**When to use which fan-out.** Copy-on-write into per-recipient inboxes for 1:1 and small group chats, where reads are cheap and fan-out is tiny. Switch to a shared per-conversation log that members read forward from for large rooms and broadcast channels, where copying each message to thousands of inboxes would melt your write tier. Many systems run both and switch based on member count.
 
 **Try this**
 

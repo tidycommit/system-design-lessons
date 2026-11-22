@@ -29,15 +29,20 @@ Cells also give you a natural shard key: partition the geo index by region or ce
 
 **Matching without double-booking**
 
-Dispatch picks a driver and sends an offer. The dangerous moment is two riders' requests choosing the same driver at the same time. The usual fix is to make the driver's state change atomic: move them from available to offered with a compare-and-set or a short lease that expires if they don't respond in, say, 15 seconds. Whoever wins the swap gets the driver; the loser moves on to the next candidate. Accept and cancel requests need idempotency keys, because phones on bad networks retry.
+Dispatch picks a driver and sends an offer. The dangerous moment is two riders' requests choosing the same driver at the same time. The usual fix is to make the driver's state change atomic: move them from available to offered with a compare-and-set or a short lease that expires if they don't respond in, say, 15 seconds. Whoever wins the swap gets the driver; the loser moves on to the next candidate. Accept and cancel requests need idempotency keys, because phones on bad networks retry (lesson 11).
+
+**A second example: Uber's Ringpop and Lyft Line (2015-2016).** Uber's real-time dispatch was built on **Ringpop**, an application-layer sharding library: each dispatch process joined a consistent-hash ring, used SWIM gossip to track membership and detect failed nodes, and followed a "handle or forward" rule, hash the key (a geo region), handle it locally if you own it, otherwise forward to the owner. That spreads stateful matching across many machines with no central coordinator and automatic rebalancing when a node dies. Lyft's "Matchmaking in Lyft Line" (2016) tackled the harder shared-rides variant: it started with a greedy, straight-line matcher checking detour and pickup-time constraints, then evolved through rerouting, less-greedy matching, and route swapping to improve overall match quality. Together they show the two halves of dispatch: how you *shard* the matching work, and how you *rank* candidate matches.
 
 **Tradeoffs and gotchas**
 
 - **Freshness vs cost.** More frequent location pings give better matches and smoother maps, but cost battery, bandwidth, and write load. Many apps send less often when a driver is idle and more often during a trip.
-- **Hot cells.** A stadium letting out or an airport queue puts thousands of drivers and riders in a few cells. Split busy cells finer or spread them across more servers.
+- **Hot cells.** A stadium letting out or an airport queue puts thousands of drivers and riders in a few cells. Split busy cells finer or spread them across more servers (lesson 37).
 - **Losing location data is fine; losing trips is not.** If a location node dies, drivers repopulate it within seconds on their next ping. Trip state needs replication and a real database.
 - **Greedy vs batched matching.** Giving each rider the nearest free driver right away is simple, but collecting requests for a second or two and matching them as a batch can cut total pickup time across the city. You trade a little latency for better overall results.
+- **Offer timeouts and cascades.** If a driver ignores an offer, the lease must expire and release them quickly, or riders wait on a driver who will never accept.
 - **Surge pricing is a feedback loop.** It reads supply and demand per area and changes both, so compute it on a separate, slower path and smooth it so prices don't swing wildly every few seconds.
+
+**When to use which matching.** Use greedy nearest-driver matching when supply is plentiful and simplicity matters, since riders get an offer instantly. Switch to short-window batched matching when demand is dense and you want to optimize total pickup time or enable pooling, accepting a second or two of extra latency. Keep location state in memory and trip state in a durable, replicated store, always, because they have opposite correctness and cost profiles.
 
 **Try this**
 

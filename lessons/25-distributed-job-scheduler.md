@@ -31,14 +31,23 @@ Kubernetes CronJob is a good one to read, because its docs are honest about the 
 
 For long multi-step jobs, workflow engines like Temporal go further: timers and each step's progress are persisted as an event history, so a workflow can sleep for 30 days and resume on a different machine as if nothing happened.
 
+## A second example: Dropbox's Async Task Framework (2020)
+
+Dropbox wrote about ATF, which runs both immediate and delayed tasks at scale. Tasks live in Edgestore (its metadata store). A **Store Consumer polls roughly every second** for tasks whose trigger time has arrived and enqueues them into per-lambda, per-priority SQS queues; workers then execute them. The whole thing is deliberately at-least-once: enqueued, claimed, and processing states each have their own timeout, and if a timeout expires (because a worker or queue failed), the task is re-enqueued. Because of that, ATF's docs state plainly that **task callbacks must be idempotent**. Two generalizable points: the trigger path (polling for due work) and the execution path (workers) are separated so a flood of slow tasks never delays the clock, and "exactly once" is explicitly not promised, so correctness is pushed into idempotent tasks (lesson 11) rather than into the scheduler.
+
 ## Tradeoffs and failure modes
 
 - **Exactly-once is not on the menu.** A worker can finish the work and then crash before marking it done; the lease expires and the job runs again. You get at-least-once delivery, so the job itself needs an idempotency key (lesson 11) to make the second run harmless.
-- **Lease length is a dial.** Short leases recover from crashes fast but risk a slow, healthy job being stolen mid-run (two workers doing it at once). Long leases are safe but leave dead jobs stuck. Heartbeats plus a fencing token (the attempt number, checked on write) cover both.
+- **Lease length is a dial.** Short leases recover from crashes fast but risk a slow, healthy job being stolen mid-run (two workers doing it at once). Long leases are safe but leave dead jobs stuck. Heartbeats plus a fencing token (the attempt number, checked on write) cover both (lesson 32).
 - **The thundering midnight.** Everyone schedules things at `0 0 * * *`. A million jobs due in the same second will flatten the workers and whatever they call. Add jitter to recurring jobs, and rate-limit execution per tenant or per downstream.
 - **Missed-run policy.** After an outage, do you fire all 6 missed hourly runs, just the latest one, or none? There's no universal answer; make it a per-job setting.
-- **Clock and time zones.** "9 AM daily" in New York is a different UTC time after daylight saving changes, and some local times happen twice or not at all. Store the rule with its time zone and compute the next run in that zone.
+- **Polling latency vs load.** Polling every second (like ATF) gives near-second trigger latency but constant query load; polling less often is cheaper but less punctual. Match the interval to your freshness requirement.
+- **Clock and time zones.** "9 AM daily" in New York is a different UTC time after daylight saving changes, and some local times happen twice or not at all. Store the rule with its time zone and compute the next run in that zone (lesson 35).
 - **Hot polling.** Scanning one big table every second gets expensive. Index on `(status, run_at)`, partition by time bucket, or use a timing wheel in memory for the next few minutes and only hit the database to refill it.
+
+## When to use what
+
+For simple "run this later" and recurring jobs, a durable job table plus `FOR UPDATE SKIP LOCKED` pollers and leased, idempotent workers is the sturdy default, and it scales a long way. Use a managed scheduler (Kubernetes CronJob, cloud schedulers) when you just need periodic triggers and can tolerate its honest "once-ish" guarantees. Reach for a workflow engine (Temporal, Step Functions) when a "job" is really a long, multi-step process with state, retries, and sleeps that must survive machine failure. In every case, make the task idempotent rather than chasing exactly-once at the scheduler.
 
 ## Try this
 
