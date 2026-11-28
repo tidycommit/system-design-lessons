@@ -55,8 +55,9 @@ A new lesson is added every day after 5 AM ET.
 | 37 | [Hot keys and hotspot mitigation](lessons/37-hot-keys.md) | 2026-11-07 |
 | 38 | [Case study: file sync (Dropbox-style)](lessons/38-file-sync.md) | 2026-11-14 |
 | 39 | [Case study: ad click aggregation (streaming counts you can bill on)](lessons/39-ad-click-aggregation.md) | 2026-11-21 |
+| 40 | [Case study: a real-time leaderboard (top-K and "what's my rank?")](lessons/40-leaderboard.md) | 2026-11-28 |
 
-_39 lessons so far._
+_40 lessons so far._
 
 <!-- LESSONS:END -->
 
